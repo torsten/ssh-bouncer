@@ -22,20 +22,7 @@
  * ssh-bouncer.c, created on 2012-Jan-14.
  */
 
-#include <arpa/inet.h>
-#include <assert.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <netinet/in.h>
-#include <stdarg.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <sys/select.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/uio.h>
-#include <unistd.h>
 
 
 // ----- Config values (who needs config files?) ------------------------------
@@ -71,6 +58,24 @@ static size_t sb_num_clients = 100;
 
 
 // ----- SSH Bouncer Program --------------------------------------------------
+
+#include <arpa/inet.h>
+#include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+
+// Linux needs __USE_BSD to get chroot(2) from here...
+#define __USE_BSD
+#include <unistd.h>
+
 
 // Prints the error string for the last error and exits the whole program
 #define SB_PRINT_ERR_DIE(MSG) { perror("[!] "MSG); exit(1); }
