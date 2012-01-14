@@ -192,6 +192,9 @@ int main(int argc, char **argv)
     
     size_t next_free_client = 0;
     
+    char nirvana[2048];
+    
+    
     for(;;) {
         FD_ZERO(&all_sockets);
         for(size_t i = 0; i < num_configs; ++i) {
@@ -248,7 +251,6 @@ int main(int argc, char **argv)
             // data or if the clients is disconnected
             for(size_t i = 0; i < sb_num_clients; ++i) {
                 int client = client_ring[i];
-                char buf[2048];
                 
                 if(client != -1) {
                     if(FD_ISSET(client, &all_sockets)) {
@@ -256,7 +258,7 @@ int main(int argc, char **argv)
                         
                         // Read data into nirvana...
                         for(;;) {
-                            did_read = read(client, buf, sizeof(buf));
+                            did_read = read(client, nirvana, sizeof(nirvana));
                             // A error occured, hmm...
                             if(did_read < 0) {
                                 // .. AH, no new data available
@@ -274,9 +276,9 @@ int main(int argc, char **argv)
                                 client_ring[i] = -1;
                                 break;
                             }
-                            // Reading less than buf size means, there was
+                            // Reading less than buffer size means, there was
                             // no more data available...
-                            else if(did_read < sizeof(buf)) {
+                            else if(did_read < sizeof(nirvana)) {
                                 // printf("READ %zu\n", did_read);
                                 break;
                             }
