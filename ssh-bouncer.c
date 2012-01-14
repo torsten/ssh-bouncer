@@ -80,52 +80,32 @@ static size_t sb_num_clients = 100;
 // Prints the error string for the last error and exits the whole program
 #define SB_PRINT_ERR_DIE(MSG) { perror("[!] "MSG); exit(1); }
 
-enum sb_ip_version {
-    sb_ipv4 = 1,
-    sb_ipv6 = 0,
-};
-
-int sb_bound_socket(unsigned short port, enum sb_ip_version ip_version)
+int sb_bound_socket(unsigned short port)
 {
     int sock;
-    union {
-        struct sockaddr_in sin;
-        struct sockaddr_in6 sin6;
-    } server_addr; 
+    struct sockaddr_in6 server_addr;
     memset(&server_addr, 0, sizeof(server_addr));
     
-    if(ip_version == sb_ipv4) {
-        sock = socket(PF_INET, SOCK_STREAM, 0);
-        if(sock < 0)
-            SB_PRINT_ERR_DIE("Creating IPv4 socked failed")
-        
-        server_addr.sin.sin_family = AF_INET;
-        server_addr.sin.sin_addr.s_addr = htonl(INADDR_ANY);
-        server_addr.sin.sin_port = htons(port);
-        
-        if(bind(sock, (struct sockaddr*)&server_addr,
-                sizeof(struct sockaddr_in)) < 0)
-            SB_PRINT_ERR_DIE("Binding IPv4 socket failed")
-        
-        if(listen(sock, 20) < 0)
-            SB_PRINT_ERR_DIE("Listening on IPv4 socket failed")
-    }
-    else {
-        sock = socket(PF_INET6, SOCK_STREAM, 0);
-        if(sock < 0)
-            SB_PRINT_ERR_DIE("Creating IPv6 socked failed")
-        
-        server_addr.sin6.sin6_family = AF_INET6;
-        server_addr.sin6.sin6_addr = in6addr_any;
-        server_addr.sin6.sin6_port = htons(port);
-        
-        if(bind(sock, (struct sockaddr*)&server_addr,
-                sizeof(struct sockaddr_in6)) < 0)
-            SB_PRINT_ERR_DIE("Binding IPv6 socket failed")
-        
-        if(listen(sock, 20) < 0)
-            SB_PRINT_ERR_DIE("Listening on IPv6 socket failed")
-    }
+    sock = socket(PF_INET6, SOCK_STREAM, 0);
+    if(sock < 0)
+        SB_PRINT_ERR_DIE("Creating socked failed")
+    
+    // Setting IPV6_V6ONLY to false (0) makes this a universal socket
+    // which will listen for IPv4 and IPv6 connections.
+    int fals = 0;
+    if(setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &fals, sizeof(fals)) < 0)
+        SB_PRINT_ERR_DIE("setsockopt(IPV6_V6ONLY) failed")
+    
+    server_addr.sin6_family = AF_INET6;
+    server_addr.sin6_addr = in6addr_any;
+    server_addr.sin6_port = htons(port);
+    
+    if(bind(sock, (struct sockaddr*)&server_addr,
+            sizeof(struct sockaddr_in6)) < 0)
+        SB_PRINT_ERR_DIE("bind() failed")
+    
+    if(listen(sock, 20) < 0)
+        SB_PRINT_ERR_DIE("listen() failed")
     
     return sock;
 }
@@ -163,8 +143,7 @@ int main(int argc, char **argv)
 {
     const size_t num_configs = sizeof(sb_listen_config) /
                                sizeof(struct sb_listen_config_t);
-    const size_t num_sockets = num_configs * 2;
-    const size_t max_num_clients = FD_SETSIZE - num_sockets;
+    const size_t max_num_clients = FD_SETSIZE - num_configs;
     
     if(sb_num_clients > max_num_clients) {
         fprintf(stderr, "[!] Configured number of clients (%zu) is larger "
@@ -173,13 +152,9 @@ int main(int argc, char **argv)
         return 1;
     }
     
-    int listen_sockets[num_configs*2];
-    for(size_t i = 0; i < num_configs; ++i) {
-        listen_sockets[i*2] = sb_bound_socket(sb_listen_config[i].port,
-                                              sb_ipv4);
-        listen_sockets[i*2 + 1] = sb_bound_socket(sb_listen_config[i].port,
-                                                  sb_ipv6);
-    }
+    int listen_sockets[num_configs];
+    for(size_t i = 0; i < num_configs; ++i)
+        listen_sockets[i] = sb_bound_socket(sb_listen_config[i].port);
     
     if(chroot(sb_chroot) < 0)
         SB_PRINT_ERR_DIE("chroot() failed")
@@ -190,8 +165,8 @@ int main(int argc, char **argv)
     if(setuid(sb_userid) < 0)
         SB_PRINT_ERR_DIE("Setting user id failed")
     
-    printf("[+] Listening on %zu sockets for max. %zu clients.\n",
-           num_sockets, max_num_clients);
+    printf("[+] Listening on %zu sockets for maximum %zu clients.\n",
+           num_configs, max_num_clients);
     
     pid_t daemon_pid = fork();
     switch(daemon_pid) {
@@ -219,7 +194,7 @@ int main(int argc, char **argv)
     
     for(;;) {
         FD_ZERO(&all_sockets);
-        for(size_t i = 0; i < num_sockets; ++i) {
+        for(size_t i = 0; i < num_configs; ++i) {
             FD_SET(listen_sockets[i], &all_sockets);
             if(listen_sockets[i] > max_fd)
                 max_fd = listen_sockets[i];
@@ -244,7 +219,7 @@ int main(int argc, char **argv)
         
         else if(ready_sockets) {
             // Walk over all listen sockets and accept new clients
-            for(size_t i = 0; i < num_sockets; ++i) {
+            for(size_t i = 0; i < num_configs; ++i) {
                 if(FD_ISSET(listen_sockets[i], &all_sockets)) {
                     int client = sb_verbose_accept(listen_sockets[i]);
                     const char * version = sb_listen_config[i/2].version_string;
