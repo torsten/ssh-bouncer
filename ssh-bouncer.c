@@ -166,7 +166,7 @@ int main(int argc, char **argv)
         SB_PRINT_ERR_DIE("Setting user id failed")
     
     printf("[+] Listening on %zu sockets for maximum %zu clients.\n",
-           num_configs, max_num_clients);
+           num_configs, sb_num_clients);
     
     pid_t daemon_pid = fork();
     switch(daemon_pid) {
