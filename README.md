@@ -12,14 +12,14 @@ that SSH is running on a standard port.
 
 You can configure the following things:
 
- - ports numbers the daemon should listen to
- - fake version strings to send to clients
- - user and group id which the daemon will run as
- - chroot folder to switch to
+ - Ports the daemon should listen to (`sb_listen_config`)
+ - Fake version strings to send to clients (`sb_listen_config`)
+ - User and group id which the daemon will run as (`sb_userid`)
+ - chroot folder to switch to (`sb_chroot`)
  
-Edit the first few lines if ssh-bouncer.c and then re-compile to do this.
+Edit the first few lines if `ssh-bouncer.c` and then re-compile to do this.
 
 
 ## License
 
-This daemon is MIT licensed (see ssh-bouncer.c), copyright &copy; 2012 Torsten Becker <torsten.becker@gmail.com>.
+This daemon is MIT licensed (see `ssh-bouncer.c`), copyright &copy; 2012 Torsten Becker <torsten.becker@gmail.com>.
