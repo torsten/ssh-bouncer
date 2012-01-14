@@ -30,8 +30,8 @@ struct sb_listen_config_t
 };
 
 static struct sb_listen_config_t sb_listen_config[] = {
-    // {22,   "SSH-2.0-OpenSSH_4.5p1 FreeBSD-20061110\n"},
-    // {222,  "SSH-2.0-OpenSSH_5.5p1 Debian-5\n"},
+    {22,   "SSH-2.0-OpenSSH_4.5p1 FreeBSD-20061110\n"},
+    {222,  "SSH-2.0-OpenSSH_5.4p1 Debian-5\n"},
     {2222, "SSH-2.0-OpenSSH_5.3\n"},
 };
 
@@ -87,12 +87,37 @@ int sb_bound_socket(unsigned short port, int ip_version)
     return sock;
 }
 
+int sb_verbose_accept(int listen_socket)
+{
+    union {
+        struct sockaddr_in sin;
+        struct sockaddr_in6 sin6;
+    } client_addr; 
+    socklen_t client_addr_len = sizeof(client_addr);
+    char client_addr_str[INET6_ADDRSTRLEN];
+    
+    int client = accept(listen_socket, (struct sockaddr *)&client_addr,
+                        &client_addr_len);
+    if(client < 0)
+        SB_PERR_AND_EXIT("select failed")
+    
+    printf("Connection from %s\n",
+           inet_ntop(client_addr.sin.sin_family,
+                     client_addr.sin.sin_family == AF_INET
+                        ? (const void *)&client_addr.sin.sin_addr
+                        : (const void *)&client_addr.sin6.sin6_addr,
+                     client_addr_str, sizeof(client_addr_str)));
+    
+    return client;
+}
+
 
 int main(int argc, char **argv)
 {
     const size_t num_configs = sizeof(sb_listen_config) /
                                sizeof(struct sb_listen_config_t);
     const size_t num_sockets = num_configs * 2;
+    const size_t max_num_clients = FD_SETSIZE - num_sockets;
     
     int listen_sockets[num_configs*2];
     
@@ -112,6 +137,9 @@ int main(int argc, char **argv)
     if(setuid(sb_userid) < 0)
         SB_PERR_AND_EXIT("Setting user id failed")
     
+    printf("[+] Listening to max %zu clients on %zu sockets.\n",
+           max_num_clients, num_sockets);
+    
     // switch(fork()) {
     //     case -1:
     //         SB_PERR_AND_EXIT("fork failed")
@@ -126,7 +154,7 @@ int main(int argc, char **argv)
     int ready_fds;
     int max_fd = 0;
     
-    int connected_clients[20];
+    int connected_clients[max_num_clients];
     size_t num_connected_clients = 0;
     
     for(;;) {
@@ -136,9 +164,10 @@ int main(int argc, char **argv)
             if(listen_sockets[i] > max_fd)
                 max_fd = listen_sockets[i];
         }
+        // walk over connected_clients and add those...
         ++max_fd;
         
-        tv.tv_sec = 5;
+        tv.tv_sec = 10;
         tv.tv_usec = 0;
         ready_fds = select(max_fd, &fds, NULL, NULL, &tv);
         
@@ -148,27 +177,9 @@ int main(int argc, char **argv)
         else if(ready_fds) {
             for(size_t i = 0; i < num_sockets; ++i) {
                 if(FD_ISSET(listen_sockets[i], &fds)) {
-                    union {
-                        struct sockaddr_in sin;
-                        struct sockaddr_in6 sin6;
-                    } client_addr; 
-                    socklen_t client_addr_len = sizeof(client_addr);
-                    char client_addr_str[INET6_ADDRSTRLEN];
-                    
-                    int client = accept(listen_sockets[i],
-                                        (struct sockaddr *)&client_addr,
-                                        &client_addr_len);
-                    if(client < 0)
-                        SB_PERR_AND_EXIT("select failed")
-                    
-                    printf("Connection from %s\n",
-                           inet_ntop(client_addr.sin.sin_family,
-                                     client_addr.sin.sin_family == AF_INET
-                                        ? &client_addr.sin.sin_addr
-                                        : &client_addr.sin6.sin6_addr,
-                                     client_addr_str, sizeof(client_addr_str)));
-                    
+                    int client = sb_verbose_accept(listen_sockets[i]);
                     const char * version = sb_listen_config[i/2].version_string;
+                    
                     if(write(client, version, strlen(version)) < 0) {
                         perror("Error writing to client");
                         close(client);
@@ -179,6 +190,7 @@ int main(int argc, char **argv)
                     }
                 }
             }
+            // walk over connected_clients and close those
         }
     }
     
