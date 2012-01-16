@@ -225,7 +225,7 @@ int main(int argc, char **argv)
             for(size_t i = 0; i < num_configs; ++i) {
                 if(FD_ISSET(listen_sockets[i], &all_sockets)) {
                     int client = sb_verbose_accept(listen_sockets[i]);
-                    const char * version = sb_listen_config[i/2].version_string;
+                    const char * version = sb_listen_config[i].version_string;
                     
                     // Try to write the fake version string...
                     if(write(client, version, strlen(version)) < 0) {
